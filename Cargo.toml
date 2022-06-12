@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2022 Heiko Schaefer <heiko@schaefer.name>
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "openpgp-card-init"
+version = "0.1.0"
+edition = "2021"
+description = "PoC tool to inizialize an OpenPGP card"
+license = "MIT OR Apache-2.0"
+authors = ["Heiko Schaefer <heiko@schaefer.name>"]
+
+[dependencies]
+openpgp-card = { path = "../openpgp-card/openpgp-card", version = "0.2.6" }
+openpgp-card-pcsc = { path = "../openpgp-card/pcsc", version = "0.2" }
+openpgp-card-sequoia = { path = "../openpgp-card/openpgp-card-sequoia", version = "0.0.13" }
+sequoia-openpgp = "1.9"
+anyhow = "1"
+clap = { version = "3.1", features = ["derive"] }
+zip = "0.6"
+pem = "1"
+rand = "0.8"
