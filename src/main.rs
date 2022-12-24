@@ -19,9 +19,10 @@
 
 use std::collections::HashMap;
 use std::io::Write;
+
 use anyhow::Result;
-use openpgp_card::{KeyType, OpenPgp, card_do::TouchPolicy, Error, StatusBytes};
 use openpgp_card::algorithm::AlgoSimple;
+use openpgp_card::{card_do::TouchPolicy, Error, KeyType, OpenPgp, StatusBytes};
 use openpgp_card_pcsc::PcscBackend;
 use openpgp_card_sequoia::card::Open;
 use openpgp_card_sequoia::util;
@@ -60,16 +61,19 @@ fn pem_encode(data: Vec<u8>) -> String {
 
 fn card_empty(open: &Open) -> Result<()> {
     let fp = open.fingerprints()?;
-    if fp.signature().is_some() ||
-        fp.decryption().is_some() ||
-        fp.authentication().is_some() {
+    if fp.signature().is_some() || fp.decryption().is_some() || fp.authentication().is_some() {
         Err(anyhow::anyhow!("Card contains key material"))
     } else {
         Ok(())
     }
 }
 
-fn init(open: &mut Open, name: &str, email: &str, touch_policy: TouchPolicy) -> Result<HashMap<String, Vec<u8>>> {
+fn init(
+    open: &mut Open,
+    name: &str,
+    email: &str,
+    touch_policy: TouchPolicy,
+) -> Result<HashMap<String, Vec<u8>>> {
     // We know that there is no key material on the card
     // -> reset it to a known default state
     open.factory_reset()?;
@@ -82,7 +86,9 @@ fn init(open: &mut Open, name: &str, email: &str, touch_policy: TouchPolicy) -> 
     // Generate key in each slot, set name on card
     open.verify_admin(PW3)?;
     {
-        let mut admin = open.admin_card().ok_or(anyhow::anyhow!("couldn't get admin access"))?;
+        let mut admin = open
+            .admin_card()
+            .ok_or(anyhow::anyhow!("couldn't get admin access"))?;
 
         // generate keys on card
         admin.generate_key_simple(KeyType::Signing, Some(AlgoSimple::Curve25519))?;
@@ -105,7 +111,15 @@ fn init(open: &mut Open, name: &str, email: &str, touch_policy: TouchPolicy) -> 
     // Generate a public key "Cert" representation of the key material
     // FIXME: pass User IDs (split and combined) as parameters
     // FIXME: set expiration?
-    let cert = util::make_cert(open, sig.expect("Signature key missing on card"), dec, aut, Some(PW1), &|| {}, &|| {})?;
+    let cert = util::make_cert(
+        open,
+        sig.expect("Signature key missing on card"),
+        dec,
+        aut,
+        Some(PW1),
+        &|| {},
+        &|| {},
+    )?;
 
     let mut pubkey: Vec<u8> = vec![];
     cert.armored().serialize(&mut pubkey)?;
@@ -117,7 +131,9 @@ fn init(open: &mut Open, name: &str, email: &str, touch_policy: TouchPolicy) -> 
     {
         // Disable touch confirmation for attestation
         // (to allow non-interactive attestation generation)
-        let mut admin = open.admin_card().ok_or(anyhow::anyhow!("couldn't get admin access"))?;
+        let mut admin = open
+            .admin_card()
+            .ok_or(anyhow::anyhow!("couldn't get admin access"))?;
         let res = admin.set_uif(KeyType::Attestation, TouchPolicy::Off);
         if let Err(e) = res {
             if matches!(e, Error::CardStatus(StatusBytes::SecurityRelatedIssues)) {
@@ -133,11 +149,19 @@ fn init(open: &mut Open, name: &str, email: &str, touch_policy: TouchPolicy) -> 
     {
         // Generate attestations for each key slot, on the card
         open.verify_user_for_signing(PW1)?;
-        let mut sign = open.signing_card().ok_or(anyhow::anyhow!("couldn't get sign access"))?;
+        let mut sign = open
+            .signing_card()
+            .ok_or(anyhow::anyhow!("couldn't get sign access"))?;
 
-        sign.generate_attestation(KeyType::Signing, &|| { println!("Touch confirmation needed to attest SIG key") })?;
-        sign.generate_attestation(KeyType::Decryption, &|| { println!("Touch confirmation needed to attest DEC key") })?;
-        sign.generate_attestation(KeyType::Authentication, &|| { println!("Touch confirmation needed to attest AUT key") })?;
+        sign.generate_attestation(KeyType::Signing, &|| {
+            println!("Touch confirmation needed to attest SIG key")
+        })?;
+        sign.generate_attestation(KeyType::Decryption, &|| {
+            println!("Touch confirmation needed to attest DEC key")
+        })?;
+        sign.generate_attestation(KeyType::Authentication, &|| {
+            println!("Touch confirmation needed to attest AUT key")
+        })?;
     }
 
     println!("- Retrieving attestations and attestation certificate ...");
@@ -150,21 +174,38 @@ fn init(open: &mut Open, name: &str, email: &str, touch_policy: TouchPolicy) -> 
     let att_cert = open.attestation_certificate()?;
 
     // Collect data to save as files: pubkey, attestations, attestation cert
-    let files =
-        HashMap::from([
-            (format!("{}.pub", file_ident), pubkey),
-            (format!("{}-sig.attestation", file_ident), pem_encode(att_sig).as_bytes().to_vec()),
-            (format!("{}-dec.attestation", file_ident), pem_encode(att_dec).as_bytes().to_vec()),
-            (format!("{}-aut.attestation", file_ident), pem_encode(att_aut).as_bytes().to_vec()),
-            (format!("{}-attestation.cert", file_ident), pem_encode(att_cert).as_bytes().to_vec()),
-        ]);
+    let files = HashMap::from([
+        (format!("{}.pub", file_ident), pubkey),
+        (
+            format!("{}-sig.attestation", file_ident),
+            pem_encode(att_sig).as_bytes().to_vec(),
+        ),
+        (
+            format!("{}-dec.attestation", file_ident),
+            pem_encode(att_dec).as_bytes().to_vec(),
+        ),
+        (
+            format!("{}-aut.attestation", file_ident),
+            pem_encode(att_aut).as_bytes().to_vec(),
+        ),
+        (
+            format!("{}-attestation.cert", file_ident),
+            pem_encode(att_cert).as_bytes().to_vec(),
+        ),
+    ]);
 
     println!("- Configuring touch confirmation for all key slots ...");
     {
         // Set touch confirmation for all key slots to "Fixed"
         // (to allow non-interactive attestation generation)
-        let mut admin = open.admin_card().ok_or(anyhow::anyhow!("couldn't get admin access"))?;
-        for kt in [KeyType::Signing, KeyType::Decryption, KeyType::Authentication] {
+        let mut admin = open
+            .admin_card()
+            .ok_or(anyhow::anyhow!("couldn't get admin access"))?;
+        for kt in [
+            KeyType::Signing,
+            KeyType::Decryption,
+            KeyType::Authentication,
+        ] {
             admin.set_uif(kt, touch_policy)?;
         }
 
