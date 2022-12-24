@@ -22,13 +22,13 @@ use std::io::Write;
 
 use anyhow::Result;
 use openpgp_card::algorithm::AlgoSimple;
-use openpgp_card::{card_do::TouchPolicy, Error, KeyType, OpenPgp, StatusBytes};
+use openpgp_card::{card_do::TouchPolicy, Error, KeyType, StatusBytes};
 use openpgp_card_pcsc::PcscBackend;
-use openpgp_card_sequoia::card::Open;
-use openpgp_card_sequoia::util;
+use openpgp_card_sequoia::{state::Open, state::Transaction, util, Card};
 use rand::Rng;
 use sequoia_openpgp::serialize::Serialize;
 
+// We expect a blank/reset card. These are the default PINs we expect.
 const PW1: &[u8] = "123456".as_bytes();
 const PW3: &[u8] = "12345678".as_bytes();
 
@@ -59,7 +59,7 @@ fn pem_encode(data: Vec<u8>) -> String {
     pem::encode(&pem)
 }
 
-fn card_empty(open: &Open) -> Result<()> {
+fn card_empty(open: &Card<Transaction>) -> Result<()> {
     let fp = open.fingerprints()?;
     if fp.signature().is_some() || fp.decryption().is_some() || fp.authentication().is_some() {
         Err(anyhow::anyhow!("Card contains key material"))
@@ -69,7 +69,7 @@ fn card_empty(open: &Open) -> Result<()> {
 }
 
 fn init(
-    open: &mut Open,
+    open: &mut Card<Transaction>,
     name: &str,
     email: &str,
     touch_policy: TouchPolicy,
@@ -104,9 +104,9 @@ fn init(
     open.reload_ard()?;
 
     // Export each key slot as PublicKey
-    let sig = util::key_slot(open, KeyType::Signing)?;
-    let dec = util::key_slot(open, KeyType::Decryption)?;
-    let aut = util::key_slot(open, KeyType::Authentication)?;
+    let sig = open.public_key(KeyType::Signing)?;
+    let dec = open.public_key(KeyType::Decryption)?;
+    let aut = open.public_key(KeyType::Authentication)?;
 
     // Generate a public key "Cert" representation of the key material
     // FIXME: pass User IDs (split and combined) as parameters
@@ -119,6 +119,7 @@ fn init(
         Some(PW1),
         &|| {},
         &|| {},
+        &[],
     )?;
 
     let mut pubkey: Vec<u8> = vec![];
@@ -245,8 +246,8 @@ fn init(
     // and/or not show the Admin PIN to the user at all?
 
     println!();
-    println!("***          Make sure you don't lose the PINs above!          ***");
-    println!("*** Without them you cannot use your OpenPGP keys on this card ***");
+    println!("***         Make sure you don't lose the PINs above!          ***");
+    println!("*** Without them you cannot use the OpenPGP keys on this card ***");
 
     Ok(files)
 }
@@ -257,21 +258,24 @@ fn main() -> Result<()> {
     let output = "/tmp/foo.zip"; // FIXME: clap param
     let touch_policy = TouchPolicy::Fixed; // FIXME: clap param
 
-    let cards: Vec<_> = PcscBackend::cards(None).map(|cards| cards.into_iter().collect())?;
+    let backends: Vec<_> = PcscBackend::cards(None).map(|cards| cards.into_iter().collect())?;
 
-    if cards.is_empty() {
+    if backends.is_empty() {
         return Err(anyhow::anyhow!("No cards found"));
     } else {
-        for mut card in cards {
-            let mut pgp = OpenPgp::new(&mut card);
-            let mut open = Open::new(pgp.transaction()?)?;
-            print!("Found card {} .. ", open.application_identifier()?.ident());
+        for backend in backends {
+            let mut card: Card<Open> = backend.into();
+            let mut transaction = card.transaction()?;
+            print!(
+                "Found card {} .. ",
+                transaction.application_identifier()?.ident()
+            );
 
-            if card_empty(&open).is_ok() {
+            if card_empty(&transaction).is_ok() {
                 // ok, we'll initialize this card
                 println!("empty -> initializing!");
 
-                let files = init(&mut open, name, email, touch_policy)?;
+                let files = init(&mut transaction, name, email, touch_policy)?;
 
                 export(output, files)?;
 
