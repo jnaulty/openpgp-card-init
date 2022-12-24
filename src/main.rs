@@ -3,7 +3,7 @@
 
 //! This tool is for demonstration purposes only, DO NOT USE IN PRODUCTION.
 //!
-//! This is an example tool that initializes an OpenPGP card in a specific way.
+//! This is an example tool that initializes an OpenPGP card in a specific way:
 //! It generates private keys on card, and exports information about the
 //! resulting key material as a zip file.
 //!
@@ -14,6 +14,8 @@
 //!
 //! The tool will only attempt to initialize a card if it has *no* key material
 //! on it (absence of keys is detected via the Fingerprint DOs on the card).
+//! The tool also assumes that the card is configured with default User and
+//! Admin PINs.
 
 use std::collections::HashMap;
 use std::io::Write;
