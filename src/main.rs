@@ -443,7 +443,10 @@ fn init(
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let backends: Vec<_> = PcscBackend::cards(None).map(|cards| cards.into_iter().collect())?;
+    let backends: Vec<_> = match cli.card {
+        None => PcscBackend::cards(None).map(|cards| cards.into_iter().collect())?,
+        Some(ident) => vec![PcscBackend::open_by_ident(&ident, None)?],
+    };
 
     if backends.is_empty() {
         return Err(anyhow::anyhow!("No cards found"));
