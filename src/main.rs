@@ -21,12 +21,63 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use anyhow::Result;
+use clap::{Parser, ValueEnum};
 use openpgp_card::algorithm::AlgoSimple;
 use openpgp_card::{card_do::TouchPolicy, Error, KeyType, StatusBytes};
 use openpgp_card_pcsc::PcscBackend;
 use openpgp_card_sequoia::{state::Open, state::Transaction, util, Card};
 use rand::Rng;
 use sequoia_openpgp::serialize::Serialize;
+
+#[derive(Parser, Debug)]
+#[clap(
+    name = "openpgp-card-init",
+    author = "Heiko Schäfer <heiko@schaefer.name>",
+    version,
+    about = "An example tool that initializes OpenPGP cards."
+)]
+pub struct Cli {
+    /// Name of the card's user.
+    #[clap(long = "name")]
+    pub name: String,
+
+    /// Email of the card's user.
+    #[clap(long = "email")]
+    pub email: String,
+
+    /// Touch policy for the regular key slots.
+    ///
+    /// This policy will be set for the SIG, DEC, AUT key slots.
+    /// The ATT key slot touch policy is always set to `On`.
+    #[clap(long = "touch")]
+    pub touch_policy: Pol,
+
+    /// Filename of the output zip archive.
+    #[clap(long = "output")]
+    pub output: String,
+}
+
+#[derive(ValueEnum, Debug, Clone)]
+#[clap(rename_all = "verbatim")]
+pub enum Pol {
+    Off,
+    On,
+    Cached,
+    Fixed,
+    CachedFixed,
+}
+
+impl From<Pol> for TouchPolicy {
+    fn from(pol: Pol) -> Self {
+        match pol {
+            Pol::Off => TouchPolicy::Off,
+            Pol::On => TouchPolicy::On,
+            Pol::Cached => TouchPolicy::Cached,
+            Pol::Fixed => TouchPolicy::Fixed,
+            Pol::CachedFixed => TouchPolicy::CachedFixed,
+        }
+    }
+}
 
 // We expect a blank/reset card. These are the default PINs we expect.
 const PW1: &[u8] = "123456".as_bytes();
@@ -253,10 +304,7 @@ fn init(
 }
 
 fn main() -> Result<()> {
-    let name = "Foo Bar"; // FIXME: clap param
-    let email = "foo@example.org"; // FIXME: clap param
-    let output = "/tmp/foo.zip"; // FIXME: clap param
-    let touch_policy = TouchPolicy::Fixed; // FIXME: clap param
+    let cli = Cli::parse();
 
     let backends: Vec<_> = PcscBackend::cards(None).map(|cards| cards.into_iter().collect())?;
 
@@ -275,9 +323,14 @@ fn main() -> Result<()> {
                 // ok, we'll initialize this card
                 println!("empty -> initializing!");
 
-                let files = init(&mut transaction, name, email, touch_policy)?;
+                let files = init(
+                    &mut transaction,
+                    &cli.name,
+                    &cli.email,
+                    cli.touch_policy.into(),
+                )?;
 
-                export(output, files)?;
+                export(&cli.output, files)?;
 
                 return Ok(()); // stop after initializing one card
             } else {

@@ -15,7 +15,7 @@ openpgp-card-pcsc = "0.3"
 openpgp-card-sequoia = "0.1"
 sequoia-openpgp = "1.9"
 anyhow = "1"
-clap = { version = "3.1", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 zip = "0.6"
 pem = "1"
 rand = "0.8"
