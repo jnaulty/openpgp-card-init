@@ -19,7 +19,7 @@
 
 use std::collections::HashMap;
 use std::io::Write;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -31,6 +31,7 @@ use openpgp_card_sequoia::{state::Open, state::Transaction, util, Card, PublicKe
 use rand::Rng;
 use sequoia_openpgp::cert::CertRevocationBuilder;
 use sequoia_openpgp::packet::{Signature, UserID};
+use sequoia_openpgp::policy::StandardPolicy;
 use sequoia_openpgp::serialize::Serialize;
 use sequoia_openpgp::types::ReasonForRevocation;
 use sequoia_openpgp::{armor, Cert, Packet};
@@ -67,6 +68,12 @@ pub struct Cli {
     /// Optional, if unset any blank card that is found will be initialized.
     #[clap(long = "card")]
     pub card: Option<String>,
+
+    /// Expiration of certificate in days.
+    ///
+    /// Optional, if unset the certificate has no expiration date.
+    #[clap(long = "expiration")]
+    pub expiration_days: Option<u32>,
 }
 
 #[derive(ValueEnum, Debug, Clone)]
@@ -214,6 +221,7 @@ fn init(
     open: &mut Card<Transaction>,
     name: &str,
     email: &str,
+    expiration_days: Option<u32>,
     touch_policy: TouchPolicy,
 ) -> Result<HashMap<String, Vec<u8>>> {
     // We know that there is no key material on the card
@@ -255,9 +263,7 @@ fn init(
     // make a traditional "combined" User ID from name/email parameters
     let uid = UserID::from_address(name.into(), None, email)?;
 
-    // FIXME: set expiration? (default: 2y, optional param?)
-
-    let cert = util::make_cert(
+    let mut cert = util::make_cert(
         open,
         sig.clone().expect("Signature key missing on card"),
         dec,
@@ -267,6 +273,33 @@ fn init(
         &|| {},
         &[uid.to_string()],
     )?;
+
+    // Set expiration in days (if no expiration parameter is given, cert doesn't expire)
+    if let Some(expiration) = expiration_days {
+        // Allow signing on the card
+        open.verify_user_for_signing(PW1)?;
+        if let Some(mut sign) = open.signing_card() {
+            // now + expiration days
+            let day = Duration::new(24 * 60 * 60, 0);
+
+            // 'expiration' days from now
+            let exp: SystemTime = SystemTime::now() + expiration * day;
+
+            // Card-backed signer for bindings
+            let mut card_signer = sign
+                .signer_from_public(sig.clone().expect("Signature key missing on card"), &|| {});
+
+            // Make signature
+            let p = StandardPolicy::new();
+            let s = cert.set_expiration_time(&p, None, &mut card_signer, Some(exp))?;
+
+            cert = cert.insert_packets(s)?;
+
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Failed to open card for signing"))
+        }?;
+    }
 
     let mut pubkey: Vec<u8> = vec![];
     cert.armored().serialize(&mut pubkey)?;
@@ -431,6 +464,7 @@ fn main() -> Result<()> {
                     &mut transaction,
                     &cli.name,
                     &cli.email,
+                    cli.expiration_days,
                     cli.touch_policy.into(),
                 )?;
 
