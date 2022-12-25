@@ -34,7 +34,7 @@ const PW3: &[u8] = "12345678".as_bytes();
 
 fn export(zip_name: &str, files: HashMap<String, Vec<u8>>) -> zip::result::ZipResult<()> {
     let path = std::path::Path::new(zip_name);
-    let file = std::fs::File::create(&path).unwrap();
+    let file = std::fs::File::create(path).unwrap();
 
     let mut zip = zip::ZipWriter::new(file);
 
@@ -71,7 +71,7 @@ fn card_empty(open: &Card<Transaction>) -> Result<()> {
 fn init(
     open: &mut Card<Transaction>,
     name: &str,
-    email: &str,
+    _email: &str,
     touch_policy: TouchPolicy,
 ) -> Result<HashMap<String, Vec<u8>>> {
     // We know that there is no key material on the card
@@ -80,7 +80,7 @@ fn init(
 
     // Get card identifier for use in output filenames
     let ident = open.application_identifier()?.ident();
-    let file_ident = ident.replace(":", "_");
+    let file_ident = ident.replace(':', "_");
 
     println!("- Generating keys ...");
     // Generate key in each slot, set name on card
@@ -88,7 +88,7 @@ fn init(
     {
         let mut admin = open
             .admin_card()
-            .ok_or(anyhow::anyhow!("couldn't get admin access"))?;
+            .ok_or_else(|| anyhow::anyhow!("couldn't get admin access"))?;
 
         // generate keys on card
         admin.generate_key_simple(KeyType::Signing, Some(AlgoSimple::Curve25519))?;
@@ -134,7 +134,7 @@ fn init(
         // (to allow non-interactive attestation generation)
         let mut admin = open
             .admin_card()
-            .ok_or(anyhow::anyhow!("couldn't get admin access"))?;
+            .ok_or_else(|| anyhow::anyhow!("couldn't get admin access"))?;
         let res = admin.set_uif(KeyType::Attestation, TouchPolicy::Off);
         if let Err(e) = res {
             if matches!(e, Error::CardStatus(StatusBytes::SecurityRelatedIssues)) {
@@ -152,7 +152,7 @@ fn init(
         open.verify_user_for_signing(PW1)?;
         let mut sign = open
             .signing_card()
-            .ok_or(anyhow::anyhow!("couldn't get sign access"))?;
+            .ok_or_else(|| anyhow::anyhow!("couldn't get sign access"))?;
 
         sign.generate_attestation(KeyType::Signing, &|| {
             println!("Touch confirmation needed to attest SIG key")
@@ -201,7 +201,7 @@ fn init(
         // (to allow non-interactive attestation generation)
         let mut admin = open
             .admin_card()
-            .ok_or(anyhow::anyhow!("couldn't get admin access"))?;
+            .ok_or_else(|| anyhow::anyhow!("couldn't get admin access"))?;
         for kt in [
             KeyType::Signing,
             KeyType::Decryption,
