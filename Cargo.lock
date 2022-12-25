@@ -928,6 +928,7 @@ name = "openpgp-card-init"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "openpgp-card",
  "openpgp-card-pcsc",
