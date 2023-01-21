@@ -24,4 +24,5 @@ jobs:
           curl --fail-with-body -sS  -X POST --data-binary @"archive.tar.gz" -H 'Content-Type: application/octet-stream' -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://uploads.github.com/repos/jnaulty/openpgp-card-init/releases/$id/assets?name=openpgp-card-init_${{ github.ref_name }}_x86_64-apple-darwin.tar.gz"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NETTLE_STATIC: "yes"
 
