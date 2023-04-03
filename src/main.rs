@@ -241,9 +241,9 @@ fn init(
             .ok_or_else(|| anyhow::anyhow!("couldn't get admin access"))?;
 
         // generate keys on card
-        admin.generate_key_simple(KeyType::Signing, Some(AlgoSimple::Curve25519))?;
-        admin.generate_key_simple(KeyType::Decryption, Some(AlgoSimple::Curve25519))?;
-        admin.generate_key_simple(KeyType::Authentication, Some(AlgoSimple::Curve25519))?;
+        admin.generate_key_simple(KeyType::Signing, Some(AlgoSimple::RSA4k))?;
+        admin.generate_key_simple(KeyType::Decryption, Some(AlgoSimple::RSA4k))?;
+        admin.generate_key_simple(KeyType::Authentication, Some(AlgoSimple::RSA4k))?;
 
         admin.set_name(name)?;
     }
