@@ -10,7 +10,6 @@ license = "MIT OR Apache-2.0"
 authors = ["Heiko Schaefer <heiko@schaefer.name>"]
 
 [dependencies]
-bindgen = "0.69.4"
 openpgp-card = "0.3"
 openpgp-card-pcsc = "0.3"
 openpgp-card-sequoia = {version = "0.1", default-features = false, features = []} 
