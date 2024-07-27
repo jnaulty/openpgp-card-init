@@ -10,13 +10,18 @@ license = "MIT OR Apache-2.0"
 authors = ["Heiko Schaefer <heiko@schaefer.name>"]
 
 [dependencies]
+bindgen = "0.69.4"
 openpgp-card = "0.3"
 openpgp-card-pcsc = "0.3"
-openpgp-card-sequoia = "0.1"
-sequoia-openpgp = "1.9"
+openpgp-card-sequoia = {version = "0.1", default-features = false, features = []} 
+sequoia-openpgp = {version = "1.9", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"]}
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 zip = "0.6"
 pem = "1"
 rand = "0.8"
 chrono = "0.4"
+
+
+[features]
+crypto-rust = ["sequoia-openpgp/crypto-rust"]
